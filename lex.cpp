@@ -17,7 +17,7 @@ LexItem id_or_kw(const string& lexeme , int linenum)
 	string strlexeme = lexeme;
 	map<string,Token> kwmap = {
 		{ "put", PUT}, { "putline", PUTLN}, { "get", GET},
-		{ "if", IF }, { "elsif", ELSIF }, 
+		{ "if", IF }, { "elsif", ELSIF },
 		{ "else", ELSE },
 		{ "string", STRING },
 		{ "integer", INT },
@@ -28,23 +28,23 @@ LexItem id_or_kw(const string& lexeme , int linenum)
 		{ "true", TRUE }, { "then", THEN }, { "constant", CONST },
 		{ "false", FALSE }, { "is", IS }, { "end", END },
 		{ "mod", MOD }, { "and", AND }, { "or", OR }, { "not", NOT },
-		
+
 	};
 	Token tt ;
-	
+
 	for(int i = 0; i < lexeme.length(); i++)
 	{
 		strlexeme[i] = tolower(strlexeme[i]);
 	}
-	
+
 	tt = IDENT;
 	auto kIt = kwmap.find(strlexeme);
 	if( kIt != kwmap.end() )
 	{
 		tt = kIt->second;
 	}
-	
-	if(tt == TRUE || tt == FALSE)	
+
+	if(tt == TRUE || tt == FALSE)
 		tt = BCONST;
 	return LexItem(tt, lexeme, linenum);
 }
@@ -63,13 +63,13 @@ map<Token,string> tokenPrint = {
 		{ BEGIN, "BEGIN" }, { THEN, "THEN" }, { CONST, "CONST" },
 		{ TRUE, "TRUE" },
 		{ FALSE, "FALSE" },
-		
+
 		{ ICONST, "ICONST" },
 		{ FCONST, "FCONST" },
 		{ SCONST, "SCONST" },
 		{ BCONST, "BCONST"},
-		{ CCONST, "CCONST" }, 
-					
+		{ CCONST, "CCONST" },
+
 		{ PLUS, "PLUS" },
 		{ MINUS, "MINUS" },
 		{ MULT, "MULT" },
@@ -79,25 +79,25 @@ map<Token,string> tokenPrint = {
 		{ NEQ, "NEQ" },
 		{ GTHAN, "GTHAN" },
 		{ LTHAN, "LTHAN" },	{ GTE, "GTE" },
-		{ LTE, "LTE" },	
+		{ LTE, "LTE" },
 		{ AND, "AND" },
 		{ OR, "OR" },
 		{ NOT, "NOT" },
 		{ MOD, "MOD" }, { CONCAT, "CONCAT" },
-		{ EXP, "EXP" }, 
-		
+		{ EXP, "EXP" },
+
 		{ COMMA, "COMMA" }, { COLON, "COLON" },
 		{ SEMICOL, "SEMICOL" },
 		{ LPAREN, "LPAREN" },
 		{ RPAREN, "RPAREN" },
 		{ DOT, "DOT" },
-		
+
 		{ ERR, "ERR" },
 		{ DONE, "DONE" },
 };
 
 ostream& operator<<(ostream& out, const LexItem& tok) {
-	
+
 	Token tt = tok.GetToken();
 	out << tokenPrint[ tt ];
 	if( tt == ICONST || tt == FCONST || tt == BCONST) {
@@ -126,67 +126,67 @@ LexItem getNextToken(istream& in, int& linenum)
 	char ch, nextchar, nextch;
 	Token tt;
 	bool dec = false, intexp = false, floatexp = false;
-	       
-	
+
+
     while(in.get(ch)) {
-    	
+
 		switch( lexstate ) {
 		case START:
 			if( ch == '\n' )
 			{
 				linenum++;
-				
-			}	
-                
+
+			}
+
 			if( isspace(ch) )
 				continue;
 
-			
+
 
 			if( isalpha(ch) ) {
 				ch = tolower(ch);
 				lexeme = ch;
 				lexstate = INID;
-				
+
 			}
 			else if( ch == '\'' ) {
 				lexeme = "";
-				
+
 				lexstate = INCHAR;
-				
+
 			}
 			else if(ch == '\"'){
 				lexeme = "";
 				lexstate = INSTR;
 			}
-			
+
 			else if( isdigit(ch) ) {
 				lexeme = ch;
 				lexstate = ININT;
 			}
-			
+
 			else if( ch == '-' )
 			{
 				nextchar = in.peek();
-				
+
 				if(nextchar == '-')
 				{
 					in.get(ch);
-					
+
 					lexstate = INCOMMENT;
-					
+
 					continue;
-					
+
 				}
 				else
 				{
 					tt = MINUS;
 					lexeme = ch;
 					return LexItem(tt, lexeme, linenum);
-					
-				}	
+
+				}
 			}
-									
+
 			else
 			{
 				tt = ERR;
@@ -194,8 +194,8 @@ LexItem getNextToken(istream& in, int& linenum)
 				switch( ch ) {
 				case '+':
 					tt = PLUS;
-					break;  
-								
+					break;
+
 				case '*':
 					tt = MULT;
 					nextchar = in.peek();
@@ -205,22 +205,22 @@ LexItem getNextToken(istream& in, int& linenum)
 						tt = EXP;
 					}
 					break;
-												
+
 				case '=':
 					tt = EQ;
 					break;
 				case '(':
 					tt = LPAREN;
-					break;			
+					break;
 				case ')':
 					tt = RPAREN;
-					break;		
+					break;
 				case ',':
 					tt = COMMA;
 					break;
 				case ';':
 					tt = SEMICOL;
-					break;	
+					break;
 				case '>':
 					tt = GTHAN;
 					nextchar = in.peek();
@@ -230,7 +230,7 @@ LexItem getNextToken(istream& in, int& linenum)
 						tt = GTE;
 					}
 					break;
-				
+
 				case '<':
 					tt = LTHAN;
 					nextchar = in.peek();
@@ -242,7 +242,7 @@ LexItem getNextToken(istream& in, int& linenum)
 					break;
 				case '&':
 					tt = CONCAT;
-					break;	
+					break;
 				case ':':
 					tt = COLON;
 					nextchar = in.peek();
@@ -262,22 +262,22 @@ LexItem getNextToken(istream& in, int& linenum)
 					}
 					break;
 				case '.':
-					tt = DOT;				
+					tt = DOT;
 					break;
-				
+
 				}//end of inner switch
 				return LexItem(tt, lexeme, linenum);
 			}//end of else
-			
+
 			break;	//break out of START case
 
 		case INID:
 			ch = tolower(ch);
 			nextchar = in.peek();
 			if( isalpha(ch) || isdigit(ch) || (ch == '_' ) ) {
-							
+
 				lexeme += ch;
-				
+
 				if(ch == '_' && nextchar == '_')
 				{
 					return id_or_kw(lexeme, linenum);
@@ -285,20 +285,20 @@ LexItem getNextToken(istream& in, int& linenum)
 			}
 			else {
 				in.putback(ch);
-				
+
 				return id_or_kw(lexeme, linenum);
-				
+
 			}
 			break;
-					
+
 		case INCHAR:
-            
+
 			if( ch == '\n' ) {
 				ErrMsg = "New line is an invalid character constant.";
 				return LexItem(ERR, ErrMsg, linenum);
 			}
 			else if( ch == '\'' && lexeme.length() == 1) {
-				
+
 				return LexItem(CCONST, lexeme, linenum);
 			}
 			else if(lexeme.length() >= 1)
@@ -312,9 +312,9 @@ LexItem getNextToken(istream& in, int& linenum)
 			}
 			lexeme += ch;
 			break;
-			
+
 		case INSTR:
-                         
+
 			if( ch == '\n' ) {
 				return LexItem(ERR, " Invalid string constant \"" + lexeme, linenum);
 			}
@@ -323,7 +323,7 @@ LexItem getNextToken(istream& in, int& linenum)
 			}
 			lexeme += ch;
 			break;
-			
+
 		case ININT:
 			if( isdigit(ch) ) {
 				lexeme += ch;
@@ -332,7 +332,7 @@ LexItem getNextToken(istream& in, int& linenum)
 				nextch = in.peek();
 				if(isdigit(nextch))
 				{
-					
+
 					in.putback(ch);
 					lexstate = INREAL;
 				}
@@ -341,7 +341,7 @@ LexItem getNextToken(istream& in, int& linenum)
 					in.putback(ch);
 					return LexItem(ICONST, lexeme, linenum);
 				}
-				
+
 			}
 			else if(ch == 'E' || ch == 'e' )
 			{
@@ -365,13 +365,13 @@ LexItem getNextToken(istream& in, int& linenum)
 				return LexItem(ICONST, lexeme, linenum);
 			}
 			break;
-		
+
 		case INREAL:
-				
+
 			if( ch ==  '.' && isdigit(in.peek()) && !dec) {
 				lexeme += ch;
 				in.get(ch);
-				lexeme += ch; 
+				lexeme += ch;
 				dec = true;
 			}
 			else if(isdigit(ch) && dec)
@@ -394,25 +394,25 @@ LexItem getNextToken(istream& in, int& linenum)
 					return LexItem(FCONST, lexeme, linenum);
 				}
 			}
-			
+
 			else if((ch == '.') && dec && isdigit(in.peek())){
 				lexeme += ch;
-				
+
 				return LexItem(ERR, lexeme, linenum);
 			}
 			else {
 				in.putback(ch);
-				
+
 				return LexItem(FCONST, lexeme, linenum);
 			}
-			
+
 			break;
-		
+
 		case INEXP:
 			if( isdigit(ch) && (intexp || floatexp)) {
 				lexeme += ch;
 			}
-			else 
+			else
 			{
 				in.putback(ch);
 				if(intexp)
@@ -424,7 +424,7 @@ LexItem getNextToken(istream& in, int& linenum)
 					return LexItem(FCONST, lexeme, linenum);
 				}
 			}
-								
+
 		case INCOMMENT:
 			if( ch == '\n' ) {
                	lexstate = START;
@@ -432,13 +432,13 @@ LexItem getNextToken(istream& in, int& linenum)
 				//in.putback(ch);
 			}
 			break;
-		
+
 		}//end of switch
 	}//end of while loop
-	
+
 	if( in.eof() )
 		return LexItem(DONE, "", linenum);
-		
+
 	return LexItem(ERR, "Error: Some strange symbol", linenum);
 }
 
