@@ -58,7 +58,7 @@ bool Prog(istream& in, int& line) {
 
 	token = Parser::GetNextToken(in, line);
 	if (token != IDENT) {
-		ParseError(line, "Unexpected token");
+		ParseError(line, "Missing Procedure Name.");
 		return false;
 	}
 
@@ -96,7 +96,7 @@ bool ProcBody(istream& in, int& line) {
 
 	status = StmtList(in, line);
 	if (!status) {
-		ParseError(line, "some message here2");
+		ParseError(line, "Incorrect Proedure Body.");
 		return false;
 	}
 
@@ -163,6 +163,11 @@ bool DeclStmt(istream& in, int& line) {
 	}
 
 	tok = Parser::GetNextToken(in, line);
+	if (tok == IDENT) {
+		ParseError(line, "Missing comma in declaration statement.");
+		ParseError(line, "Incorrect identifiers list in Declaration Statement.");
+		return false;
+	}
 	if (tok == COMMA) {
 		return true;
 	}
@@ -179,7 +184,7 @@ bool DeclStmt(istream& in, int& line) {
 
 	status = Type(in, line);
 	if (!status) {
-		ParseError(line, "Incorrect identifiers list in Declaration Statement.");
+		ParseError(line, "Incorrect Declaration Type.");
 		return false;
 	}
 
@@ -219,7 +224,6 @@ extern bool Type(istream& in, int& line) {
 
 	tok = Parser::GetNextToken(in, line);
 	if(tok != INT && tok != FLOAT && tok != BOOL && tok != CHAR && tok != STRING) {
-		ParseError(line, "Incorrect Declaration Type.");
 		return false;
 	}
 	return true;
@@ -248,14 +252,41 @@ bool StmtList(istream& in, int& line) {
 }//End of StmtList
 
 bool Stmt(istream& in, int& line) {
-	if (AssignStmt(in, line) || PrintStmts(in, line) || GetStmt(in, line) || IfStmt(in, line)) {
+	LexItem tok;
+	tok = Parser::GetNextToken(in, line);
+	if(tok == PUT || tok == PUTLN) {
+		Parser::PushBackToken(tok);
+		if (!PrintStmts(in, line)) {
+			ParseError(line, "Invalid put statement.");
+			return false;
+		}
+		return true;
+	} else if (tok == GET) {
+		Parser::PushBackToken(tok);
+		if (!GetStmt(in, line)) {
+			ParseError(line, "Invalid get statement.");
+			return false;
+		}
+		return true;
+	} else if (tok == IF) {
+		Parser::PushBackToken(tok);
+		if (!IfStmt(in, line)) {
+			ParseError(line, "Invalid if statement.");
+			return false;
+		}
 		return true;
 	}
+	Parser::PushBackToken(tok);
+	if (AssignStmt(in, line)) {
+		return true;
+	}
+	ParseError(line, "Not sure which one to use..");
 	return false;
 }
 bool PrintStmts(istream& in, int& line){
 	LexItem tok;
 	bool status = false;
+	int linenum_before = line;
 
 	tok = Parser::GetNextToken(in, line);
 	if(tok != PUT && tok != PUTLN) {
@@ -263,9 +294,25 @@ bool PrintStmts(istream& in, int& line){
 		return false;
 	}
 
-	status = Var(in, line);
+	tok = Parser::GetNextToken(in, line);
+	if(tok != LPAREN) {
+		ParseError(line, "Not a lefty parenth");
+		return false;
+	}
+	status = Expr(in, line);
 	if(!status) {
 		ParseError(line, "Incorrect variable definition.@@");
+		return false;
+	}
+
+	tok = Parser::GetNextToken(in, line);
+	if(tok != RPAREN) {
+		ParseError(line, "Not a righty parenth");
+		return false;
+	}
+	tok = Parser::GetNextToken(in, line);
+	if(tok != SEMICOL) {
+		ParseError(linenum_before != tok.GetLinenum() ? line-1 : line, "Missing semicolon at end of statement");
 		return false;
 	}
 	return true;
@@ -280,9 +327,26 @@ bool GetStmt(istream& in, int& line){
 		return false;
 	}
 
+	tok = Parser::GetNextToken(in, line);
+	if(tok != LPAREN) {
+		ParseError(line, "Not a left parenth");
+		return false;
+	}
+
 	status = Var(in, line);
 	if(!status) {
 		ParseError(line, "Incorrect variable definition. ^^");
+		return false;
+	}
+	tok = Parser::GetNextToken(in, line);
+	if(tok != RPAREN) {
+		ParseError(line, "Not a right parenth");
+		return false;
+	}
+
+	tok = Parser::GetNextToken(in, line);
+	if(tok != SEMICOL) {
+		ParseError(line, "Not a semicolon ##");
 		return false;
 	}
 	return true;
@@ -351,7 +415,6 @@ bool AssignStmt(istream& in, int& line){
 
 	status = Var(in, line);
 	if(!status) {
-		ParseError(line, "Incorrect variable definition.22");
 		return false;
 	}
 
