@@ -8,6 +8,7 @@
 #include "parser.h"
 
 map<string, bool> defVar;
+bool endOfLineError = true;
 
 namespace Parser {
 	bool pushed_back = false;
@@ -52,7 +53,7 @@ bool Prog(istream& in, int& line) {
 	token = Parser::GetNextToken(in, line);
 
 	if (token != PROCEDURE) {
-		ParseError(line, "Unexpected token");
+		ParseError(line, "Incorrect compilation file.");
 		return false;
 	}
 
@@ -71,7 +72,7 @@ bool Prog(istream& in, int& line) {
 	status = ProcBody(in, line);
 
 	if (!status) {
-		ParseError(line, "Incorrect Procedure Definition.");
+		ParseError(endOfLineError ? line-1 : line, "Incorrect Procedure Definition.");
 		return false;
 	}
 
@@ -96,7 +97,7 @@ bool ProcBody(istream& in, int& line) {
 
 	status = StmtList(in, line);
 	if (!status) {
-		ParseError(line, "Incorrect Proedure Body.");
+		ParseError(endOfLineError ? line-1 : line,"Incorrect Procedure Body.");
 		return false;
 	}
 
@@ -149,7 +150,6 @@ bool DeclStmt(istream& in, int& line) {
 
 	tok = Parser::GetNextToken(in, line);
 	if(tok != IDENT) {
-		cout << "Look: " << tok.GetToken() << endl;
 		ParseError(line, "Incorrect Declaration Type. " + tok.GetLexeme());
 		return false;
 	}
@@ -168,6 +168,9 @@ bool DeclStmt(istream& in, int& line) {
 		ParseError(line, "Incorrect identifiers list in Declaration Statement.");
 		return false;
 	}
+
+	LexItem identToBeConsidered = tok;
+
 	if (tok == COMMA) {
 		return true;
 	}
@@ -206,6 +209,10 @@ bool DeclStmt(istream& in, int& line) {
 			ParseError(line, "No Expression found");
 			return false;
 		}
+
+		// defined vars
+		defVar[identToBeConsidered.GetLexeme()] = true;
+
 		tok = Parser::GetNextToken(in, line);
 		if (tok != SEMICOL) {
 			ParseError(line, "No semicolon found");
@@ -244,7 +251,7 @@ bool StmtList(istream& in, int& line) {
 	}
 	if(!status)
 	{
-		ParseError(line, "Syntactic error in statement list.");
+		ParseError(endOfLineError ? line-1 : line, "Syntactic error in statement list.");
 		return false;
 	}
 	Parser::PushBackToken(tok); //push back the END token
@@ -257,14 +264,14 @@ bool Stmt(istream& in, int& line) {
 	if(tok == PUT || tok == PUTLN) {
 		Parser::PushBackToken(tok);
 		if (!PrintStmts(in, line)) {
-			ParseError(line, "Invalid put statement.");
+			ParseError(endOfLineError ? line-1 : line, "Invalid put statement.");
 			return false;
 		}
 		return true;
 	} else if (tok == GET) {
 		Parser::PushBackToken(tok);
 		if (!GetStmt(in, line)) {
-			ParseError(line, "Invalid get statement.");
+			ParseError(endOfLineError ? line-1 : line, "Invalid get statement.");
 			return false;
 		}
 		return true;
@@ -277,10 +284,11 @@ bool Stmt(istream& in, int& line) {
 		return true;
 	}
 	Parser::PushBackToken(tok);
-	if (AssignStmt(in, line)) {
-		return true;
+	if (!AssignStmt(in, line)) {
+		ParseError(endOfLineError ? line-1 : line, "Invalid assignment statement.");
+		return false;
 	}
-	ParseError(line, "Not sure which one to use..");
+	ParseError(endOfLineError ? line-1 : line, "Not sure which one to use..");
 	return false;
 }
 bool PrintStmts(istream& in, int& line){
@@ -296,7 +304,7 @@ bool PrintStmts(istream& in, int& line){
 
 	tok = Parser::GetNextToken(in, line);
 	if(tok != LPAREN) {
-		ParseError(line, "Not a lefty parenth");
+		ParseError(line, "Missing Left Parenthesis");
 		return false;
 	}
 	status = Expr(in, line);
@@ -307,12 +315,16 @@ bool PrintStmts(istream& in, int& line){
 
 	tok = Parser::GetNextToken(in, line);
 	if(tok != RPAREN) {
-		ParseError(line, "Not a righty parenth");
+		ParseError(line, "Missing Right Parenthesis");
 		return false;
 	}
 	tok = Parser::GetNextToken(in, line);
 	if(tok != SEMICOL) {
-		ParseError(linenum_before != tok.GetLinenum() ? line-1 : line, "Missing semicolon at end of statement");
+		Parser::PushBackToken(tok);
+		if (linenum_before != tok.GetLinenum()) {
+			endOfLineError = true;
+		}
+		ParseError(endOfLineError ? line-1 : line, "Missing semicolon at end of statement");
 		return false;
 	}
 	return true;
@@ -420,7 +432,7 @@ bool AssignStmt(istream& in, int& line){
 
 	status = Expr(in, line);
 	if(!status) {
-		ParseError(line, "Incorrect expression statement.!2!");
+		ParseError(line, "Missing Expression in Assignment Statement");
 		return false;
 	}
 
@@ -475,7 +487,7 @@ bool Relation(istream& in, int& line){
 	if(tok == EQ || tok == NEQ || tok == LTHAN || tok == LTE || tok == GTHAN || tok == GTE) {
 		status = SimpleExpr(in, line);
 		if(!status) {
-			ParseError(line, "Incorrect simple expression statement.2");
+			ParseError(line, "Missing operand after operator");
 			return false;
 		}
 	} else {
@@ -609,7 +621,7 @@ extern bool Primary(istream& in, int& line, int sign){
 
 	status = Name(in, line);
 	if(!status) {
-		ParseError(line, "Incorrect name statement.");
+		ParseError(line, "Incorrect operand statement.");
 		return false;
 	}
 
@@ -621,7 +633,7 @@ extern bool Name(istream& in, int& line){
 
 	tok = Parser::GetNextToken(in, line);
 	if(tok != IDENT) {
-		ParseError(line, "Incorrect identifier statement. %%");
+		ParseError(line, "Incorrect identifier statement. %%" + tok.GetLexeme());
 		return false;
 	}
 
