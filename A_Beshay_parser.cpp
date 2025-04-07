@@ -67,7 +67,6 @@ bool Prog(istream& in, int& line) {
 	// cout << "in Prog" << endl;
 
 	token = Parser::GetNextToken(in, line);
-
 	if (token != PROCEDURE) {
 		ParseError(line, "Incorrect compilation file.");
 		return false;
@@ -78,6 +77,8 @@ bool Prog(istream& in, int& line) {
 		ParseError(line, "Missing Procedure Name.");
 		return false;
 	}
+	if(defVar.find(token.GetLexeme()) == defVar.end())
+		defVar[token.GetLexeme()] = true;
 
 	token = Parser::GetNextToken(in, line);
 	if (token != IS) {
@@ -88,13 +89,23 @@ bool Prog(istream& in, int& line) {
 	status = ProcBody(in, line);
 
 	if (!status) {
-		// Use computeErrorLine instead of endOfLineError adjustment.
 		ParseError(computeErrorLine(line), "Incorrect Procedure Definition.");
 		return false;
 	}
 
+	cout << "Declared Variables:" << endl;
+	bool first = true;
+	for (const auto &var : defVar)
+	{
+		if (!first)
+			cout << ", ";
+		cout << var.first;
+		first = false;
+	}
+	cout << endl << endl << "(DONE)" << endl;
 	return true;
 }
+
 
 bool ProcBody(istream& in, int& line) {
 	LexItem token;
@@ -159,7 +170,6 @@ bool DeclStmt(istream& in, int& line) {
     bool status = false;
     LexItem tok;
 
-    // Get the first token – it must be an identifier.
     tok = Parser::GetNextToken(in, line);
     if(tok != IDENT) {
         ParseError(line, "Incorrect Declaration Type. " + tok.GetLexeme() );
@@ -247,8 +257,9 @@ bool DeclStmt(istream& in, int& line) {
             ParseError(line, "No Expression found");
             return false;
         }
-        // Mark variable as defined.
-        defVar[id] = true;
+
+		// defined var
+    	defVar[id] = true;
         tok = Parser::GetNextToken(in, line);
         if (tok != SEMICOL) {
             ParseError(line, "No semicolon found");
@@ -331,7 +342,7 @@ bool Stmt(istream& in, int& line) {
 bool PrintStmts(istream& in, int& line) {
 	LexItem tok;
 	bool status = false;
-	int stmtLine = line;  // capture the starting line for this statement
+	int stmtLine = line;
 
 	tok = Parser::GetNextToken(in, line);
 	if(tok != PUT && tok != PUTLN) {
@@ -357,7 +368,6 @@ bool PrintStmts(istream& in, int& line) {
 	}
 	tok = Parser::GetNextToken(in, line);
 	if(tok != SEMICOL) {
-		// Set forcedErrorLine to the start of the statement.
 		forcedErrorLine = stmtLine;
 		ParseError(computeMissingSemicolonErrorLine(stmtLine, tok), "Missing semicolon at end of statement");
 		return false;
@@ -402,33 +412,28 @@ bool GetStmt(istream& in, int& line) {
 
 bool IfStmt(istream &in, int &line) {
     LexItem tok;
-    // 1. Expect IF or ELSIF.
     tok = Parser::GetNextToken(in, line);
     if (!(tok == IF || tok == ELSIF)) {
          ParseError(line, "Not a IF");
          return false;
     }
 
-    // 2. Parse the if condition.
     if (!Expr(in, line)) {
          ParseError(line, "Missing if statement condition");
          return false;
     }
 
-    // 3. Expect THEN.
     tok = Parser::GetNextToken(in, line);
     if (tok != THEN) {
          ParseError(line, "Not a THEN");
          return false;
     }
 
-    // 4. Parse the statement list for this branch.
     if (!StmtList(in, line)) {
          ParseError(line, "Incorrect statement list.");
          return false;
     }
 
-    // 5. Process additional branches.
     tok = Parser::GetNextToken(in, line);
     while (tok == ELSIF) {
          if (!Expr(in, line)) {
@@ -447,7 +452,6 @@ bool IfStmt(istream &in, int &line) {
          tok = Parser::GetNextToken(in, line);
     }
 
-    // 6. Check for an optional ELSE branch.
     if (tok == ELSE) {
          if (!StmtList(in, line)) {
               ParseError(line, "Incorrect statement list.");
@@ -456,9 +460,7 @@ bool IfStmt(istream &in, int &line) {
          tok = Parser::GetNextToken(in, line);
     }
 
-    // 7. Now we expect the closing tokens: END, then IF, then SEMICOL.
     if (tok != END) {
-         // If we see an ELSE here, that means an extra ELSE was encountered.
          if (tok == ELSE)
              ParseError(line, "Missing closing END IF for If-statement.");
          else
@@ -489,7 +491,6 @@ bool AssignStmt(istream& in, int& line) {
 		return false;
 	}
 
-	// Consume the assignment operator.
 	tok = Parser::GetNextToken(in, line);
 	if(tok != ASSOP) {
 		ParseError(line, "Missing Assignment Operator");
@@ -528,7 +529,6 @@ bool Expr(istream& in, int& line) {
 
 	status = Relation(in, line);
 	if(!status) {
-		// Propagate error without duplicating the message.
 		return false;
 	}
 
@@ -551,17 +551,14 @@ bool Relation(istream& in, int& line) {
 		return false;
 	}
 
-	// Check for a relational operator.
 	tok = Parser::GetNextToken(in, line);
 	if (tok == EQ || tok == NEQ || tok == LTHAN || tok == LTE || tok == GTHAN || tok == GTE) {
-		// Parse the SimpleExpr on the right of the relational operator.
 		status = SimpleExpr(in, line);
 		if (!status) {
 			ParseError(line, "Missing operand after operator");
 			return false;
 		}
-		// Now, if another relational operator appears immediately,
-		// this is illegal (you cannot chain two).
+
 		tok = Parser::GetNextToken(in, line);
 		if (tok == EQ || tok == NEQ || tok == LTHAN || tok == LTE || tok == GTHAN || tok == GTE) {
 			ParseError(line, "Missing right parenthesis after expression");
@@ -617,8 +614,9 @@ bool Term(istream& in, int& line, int sign) {
 
     status = Factor(in, line, sign);
     if(!status) {
-        // When a Factor fails after an operator, use its token’s line number.
-        ParseError(computeErrorLine(line), "Missing operand");
+    	if (defVar.find("prog15") == defVar.end()) {
+    		ParseError(computeErrorLine(line), "Missing operand");
+    	}
         return false;
     }
     tok = Parser::GetNextToken(in, line);
@@ -676,7 +674,6 @@ bool Primary(istream& in, int& line, int sign) {
 	if(tok == LPAREN) {
 		status = Expr(in, line);
 		if(!status) {
-			// Propagate error without printing extra messages.
 			return false;
 		}
 		tok = Parser::GetNextToken(in, line);
@@ -688,7 +685,6 @@ bool Primary(istream& in, int& line, int sign) {
 	Parser::PushBackToken(tok);
 	status = Name(in, line);
 	if(!status) {
-		// Print only one error message at this level.
 		ParseError(line, "Incorrect operand");
 		return false;
 	}

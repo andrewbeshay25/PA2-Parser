@@ -2,7 +2,7 @@
  * main.cpp
  *
  * CS280 - Spring 2025
- * Testing Program for the SADAL Language Parser 
+ * Testing Program for the SADAL Language Parser
 */
 #include <iostream>
 #include <fstream>
@@ -20,20 +20,20 @@ int main(int argc, char *argv[])
 
 	istream *in = NULL;
 	ifstream file;
-		
+
 	for( int i=1; i<argc; i++ )
     {
 		string arg = argv[i];
-		
-		if( in != NULL ) 
+
+		if( in != NULL )
         {
 			cerr << "ONLY ONE FILE NAME ALLOWED" << endl;
 			return 0;
 		}
-		else 
+		else
         {
 			file.open(arg.c_str());
-			if( file.is_open() == false ) 
+			if( file.is_open() == false )
             {
 				cerr << "CANNOT OPEN " << arg << endl;
 				return 0;
@@ -47,9 +47,9 @@ int main(int argc, char *argv[])
 		cerr << "Missing File Name." << endl;
 		return 0;
 	}
-    
+
     bool status = Prog(*in, lineNumber);
-    
+
     if( !status )
     {
         cout << "Unsuccessful Parsing" << endl << "Number of Syntax Errors " << ErrCount() << endl;
