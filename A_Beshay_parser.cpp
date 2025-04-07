@@ -4,22 +4,41 @@
  * Programming Assignment 2
  * Spring 2025
 */
+
 #include <queue>
 #include "parser.h"
 
 map<string, bool> defVar;
 bool endOfLineError = true;
+bool metElse = false;
+
+int lastTokenLine = 0;
+int forcedErrorLine = 0;
+
+int computeErrorLine(int currentLine) {
+	if (forcedErrorLine != 0)
+		return forcedErrorLine;
+	return (lastTokenLine < currentLine ? lastTokenLine : currentLine);
+}
+
+int computeMissingSemicolonErrorLine(int stmtLine, const LexItem &tok) {
+	return (tok.GetLinenum() > stmtLine ? stmtLine : tok.GetLinenum());
+}
 
 namespace Parser {
 	bool pushed_back = false;
-	LexItem	pushed_token;
+	LexItem pushed_token;
 
 	static LexItem GetNextToken(istream& in, int& line) {
+		LexItem token;
 		if( pushed_back ) {
 			pushed_back = false;
-			return pushed_token;
+			token = pushed_token;
+		} else {
+			token = getNextToken(in, line);
 		}
-		return getNextToken(in, line);
+		lastTokenLine = token.GetLinenum();
+		return token;
 	}
 
 	static void PushBackToken(LexItem & t) {
@@ -27,20 +46,17 @@ namespace Parser {
 			abort();
 		}
 		pushed_back = true;
-		pushed_token = t;	
+		pushed_token = t;
 	}
-
 }
 
 static int error_count = 0;
 
-int ErrCount()
-{
+int ErrCount() {
     return error_count;
 }
 
-void ParseError(int line, string msg)
-{
+void ParseError(int line, string msg) {
 	++error_count;
 	cout << line << ": " << msg << endl;
 }
@@ -72,12 +88,14 @@ bool Prog(istream& in, int& line) {
 	status = ProcBody(in, line);
 
 	if (!status) {
-		ParseError(endOfLineError ? line-1 : line, "Incorrect Procedure Definition.");
+		// Use computeErrorLine instead of endOfLineError adjustment.
+		ParseError(computeErrorLine(line), "Incorrect Procedure Definition.");
 		return false;
 	}
 
 	return true;
 }
+
 bool ProcBody(istream& in, int& line) {
 	LexItem token;
 	bool status = false;
@@ -97,7 +115,7 @@ bool ProcBody(istream& in, int& line) {
 
 	status = StmtList(in, line);
 	if (!status) {
-		ParseError(endOfLineError ? line-1 : line,"Incorrect Procedure Body.");
+		ParseError(computeErrorLine(line), "Incorrect Proedure Body.");
 		return false;
 	}
 
@@ -115,117 +133,133 @@ bool ProcBody(istream& in, int& line) {
 	return true;
 }
 
-//DeclPart ::= DeclStmt { DeclStmt }
+// DeclPart ::= DeclStmt { DeclStmt }
 bool DeclPart(istream& in, int& line) {
 	bool status = false;
 	LexItem tok;
 	// cout << "in DeclPart" << endl;
 	status = DeclStmt(in, line);
-	if(status)
-	{
+	if(status) {
 		tok = Parser::GetNextToken(in, line);
-		if(tok == BEGIN )
-		{
+		if(tok == BEGIN) {
 			Parser::PushBackToken(tok);
 			return true;
-		}
-		else 
-		{
+		} else {
 			Parser::PushBackToken(tok);
 			status = DeclPart(in, line);
 		}
-	}
-	else
-	{
+	} else {
 		ParseError(line, "Non-recognizable Declaration Part.");
 		return false;
 	}
 	return true;
-}//end of DeclPart function
+} // end of DeclPart function
 
 bool DeclStmt(istream& in, int& line) {
-	bool status = false;
-	LexItem tok;
-	// cout << "in DeclStmt" << endl;
+    bool status = false;
+    LexItem tok;
 
-	tok = Parser::GetNextToken(in, line);
-	if(tok != IDENT) {
-		ParseError(line, "Incorrect Declaration Type. " + tok.GetLexeme());
-		return false;
-	}
+    // Get the first token – it must be an identifier.
+    tok = Parser::GetNextToken(in, line);
+    if(tok != IDENT) {
+        ParseError(line, "Incorrect Declaration Type. " + tok.GetLexeme() );
+        return false;
+    }
 
-	if (defVar.find(tok.GetLexeme()) == defVar.end()) {
-		defVar[tok.GetLexeme()] = false;
-	} else {
-		ParseError(line, "Variable Redefinition");
-		ParseError(line, "Incorrect identifiers list in Declaration Statement.");
-		return false;
-	}
+    string id = tok.GetLexeme();
+    if (id == "string" || id == "integer" || id == "float" || id == "boolean" || id == "character") {
+        ParseError(line, "Invalid name for an Identifier:\n(" + id + ")");
+        ParseError(line, "Incorrect identifiers list in Declaration Statement.");
+        return false;
+    }
 
-	tok = Parser::GetNextToken(in, line);
-	if (tok == IDENT) {
-		ParseError(line, "Missing comma in declaration statement.");
-		ParseError(line, "Incorrect identifiers list in Declaration Statement.");
-		return false;
-	}
+    // redefinition.
+    if (defVar.find(id) == defVar.end()) {
+        defVar[id] = false;
+    } else {
+        ParseError(line, "Variable Redefinition");
+        ParseError(line, "Incorrect identifiers list in Declaration Statement.");
+        return false;
+    }
 
-	LexItem identToBeConsidered = tok;
+    tok = Parser::GetNextToken(in, line);
+    if (tok == IDENT) {
+        ParseError(line, "Missing comma in declaration statement.");
+        ParseError(line, "Incorrect identifiers list in Declaration Statement.");
+        return false;
+    }
 
-	if (tok == COMMA) {
-		return true;
-	}
+    LexItem identToBeConsidered = tok;
 
-	if (tok != COLON) {
-		ParseError(line, "Incorrect Declaration Statement.1");
-		return false;
-	}
+    if (tok == COMMA) {
+        return true;
+    }
 
-	tok = Parser::GetNextToken(in, line);
-	if(tok != CONST) {
-		Parser::PushBackToken(tok);
-	}
+    if (tok != COLON) {
+    	ParseError(line, "Invalid name for an Identifier:\n(" + id + ")");
+    	ParseError(line, "Incorrect identifiers list in Declaration Statement.");
+        return false;
+    }
 
-	status = Type(in, line);
-	if (!status) {
-		ParseError(line, "Incorrect Declaration Type.");
-		return false;
-	}
+    tok = Parser::GetNextToken(in, line);
+    if(tok != CONST) {
+        Parser::PushBackToken(tok);
+    }
 
-	tok = Parser::GetNextToken(in, line);
-	if (tok == SEMICOL) {
-		return true;
-	}
+    status = Type(in, line);
+    if (!status) {
+        ParseError(line, "Incorrect Declaration Type.");
+        return false;
+    }
 
-	if(tok != ASSOP) {
-		Parser::PushBackToken(tok);
+    tok = Parser::GetNextToken(in, line);
+
+	if (tok == LPAREN) {
 		status = Range(in, line);
 		if (!status) {
-			ParseError(line, "Incorrect Declaration Statement.");
+			ParseError(line, "No range provided");
 			return false;
 		}
-	} else if(tok == ASSOP) {
-		status = Expr(in, line);
-		if (!status) {
-			ParseError(line, "No Expression found");
-			return false;
-		}
-
-		// defined vars
-		defVar[identToBeConsidered.GetLexeme()] = true;
-
 		tok = Parser::GetNextToken(in, line);
-		if (tok != SEMICOL) {
-			ParseError(line, "No semicolon found");
+		if (tok != RPAREN) {
+			ParseError(line, "No closing paren provided");
 			return false;
 		}
+	} else {
+		Parser::PushBackToken(tok);
 	}
 
-	// MAKE THE DECLARED VARIABLES TRUE SOMEHOW!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	tok = Parser::GetNextToken(in, line);
+    if (tok == SEMICOL) {
+        return true;
+    }
 
-	return true;
+    if(tok != ASSOP) {
+        Parser::PushBackToken(tok);
+        status = Range(in, line);
+        if (!status) {
+            ParseError(line, "Incorrect Declaration Statement.");
+            return false;
+        }
+    } else if(tok == ASSOP) {
+        status = Expr(in, line);
+        if (!status) {
+            ParseError(line, "No Expression found");
+            return false;
+        }
+        // Mark variable as defined.
+        defVar[id] = true;
+        tok = Parser::GetNextToken(in, line);
+        if (tok != SEMICOL) {
+            ParseError(line, "No semicolon found");
+            return false;
+        }
+    }
+
+    return true;
 }
 
-extern bool Type(istream& in, int& line) {
+bool Type(istream& in, int& line) {
 	LexItem tok;
 	// cout << "in Type" << endl;
 
@@ -236,27 +270,25 @@ extern bool Type(istream& in, int& line) {
 	return true;
 }
 
-//StmtList ::= Stmt { Stmt }
+// StmtList ::= Stmt { Stmt }
 bool StmtList(istream& in, int& line) {
 	bool status;
 	LexItem tok;
-	//cout << "in StmtList" << endl;
+	// cout << "in StmtList" << endl;
 	status = Stmt(in, line);
 	tok = Parser::GetNextToken(in, line);
-	while(status && (tok != END && tok != ELSIF && tok != ELSE))
-	{
+	while(status && (tok != END && tok != ELSIF && tok != ELSE)) {
 		Parser::PushBackToken(tok);
 		status = Stmt(in, line);
 		tok = Parser::GetNextToken(in, line);
 	}
-	if(!status)
-	{
-		ParseError(endOfLineError ? line-1 : line, "Syntactic error in statement list.");
+	if(!status) {
+		ParseError(computeErrorLine(line), "Syntactic error in statement list.");
 		return false;
 	}
-	Parser::PushBackToken(tok); //push back the END token
+	Parser::PushBackToken(tok); // push back the END token
 	return true;
-}//End of StmtList
+} // End of StmtList
 
 bool Stmt(istream& in, int& line) {
 	LexItem tok;
@@ -264,37 +296,42 @@ bool Stmt(istream& in, int& line) {
 	if(tok == PUT || tok == PUTLN) {
 		Parser::PushBackToken(tok);
 		if (!PrintStmts(in, line)) {
-			ParseError(endOfLineError ? line-1 : line, "Invalid put statement.");
+			ParseError(computeErrorLine(line), "Invalid put statement.");
 			return false;
 		}
 		return true;
-	} else if (tok == GET) {
+	}
+
+	if (tok == GET) {
 		Parser::PushBackToken(tok);
 		if (!GetStmt(in, line)) {
-			ParseError(endOfLineError ? line-1 : line, "Invalid get statement.");
+			ParseError(computeErrorLine(line), "Invalid get statement.");
 			return false;
 		}
 		return true;
-	} else if (tok == IF) {
+	}
+
+	if (tok == IF) {
 		Parser::PushBackToken(tok);
 		if (!IfStmt(in, line)) {
-			ParseError(line, "Invalid if statement.");
+			ParseError(line, "Invalid If statement.");
 			return false;
 		}
 		return true;
 	}
 	Parser::PushBackToken(tok);
 	if (!AssignStmt(in, line)) {
-		ParseError(endOfLineError ? line-1 : line, "Invalid assignment statement.");
+		ParseError(computeErrorLine(line), "Invalid assignment statement.");
 		return false;
 	}
-	ParseError(endOfLineError ? line-1 : line, "Not sure which one to use..");
-	return false;
+
+	return true;
 }
-bool PrintStmts(istream& in, int& line){
+
+bool PrintStmts(istream& in, int& line) {
 	LexItem tok;
 	bool status = false;
-	int linenum_before = line;
+	int stmtLine = line;  // capture the starting line for this statement
 
 	tok = Parser::GetNextToken(in, line);
 	if(tok != PUT && tok != PUTLN) {
@@ -320,16 +357,15 @@ bool PrintStmts(istream& in, int& line){
 	}
 	tok = Parser::GetNextToken(in, line);
 	if(tok != SEMICOL) {
-		Parser::PushBackToken(tok);
-		if (linenum_before != tok.GetLinenum()) {
-			endOfLineError = true;
-		}
-		ParseError(endOfLineError ? line-1 : line, "Missing semicolon at end of statement");
+		// Set forcedErrorLine to the start of the statement.
+		forcedErrorLine = stmtLine;
+		ParseError(computeMissingSemicolonErrorLine(stmtLine, tok), "Missing semicolon at end of statement");
 		return false;
 	}
 	return true;
 }
-bool GetStmt(istream& in, int& line){
+
+bool GetStmt(istream& in, int& line) {
 	LexItem tok;
 	bool status = false;
 
@@ -363,70 +399,101 @@ bool GetStmt(istream& in, int& line){
 	}
 	return true;
 }
-bool IfStmt(istream& in, int& line){
-	LexItem tok;
-	bool status = false;
 
-	tok = Parser::GetNextToken(in, line);
-	if(tok != IF && tok != ELSIF) {
-		ParseError(line, "Not a IF");
-		return false;
-	}
+bool IfStmt(istream &in, int &line) {
+    LexItem tok;
+    // 1. Expect IF or ELSIF.
+    tok = Parser::GetNextToken(in, line);
+    if (!(tok == IF || tok == ELSIF)) {
+         ParseError(line, "Not a IF");
+         return false;
+    }
 
-	status = Expr(in, line);
+    // 2. Parse the if condition.
+    if (!Expr(in, line)) {
+         ParseError(line, "Missing if statement condition");
+         return false;
+    }
 
-	if(!status) {
-		ParseError(line, "Incorrect expression statement.");
-		return false;
-	}
+    // 3. Expect THEN.
+    tok = Parser::GetNextToken(in, line);
+    if (tok != THEN) {
+         ParseError(line, "Not a THEN");
+         return false;
+    }
 
-	tok = Parser::GetNextToken(in, line);
-	if(tok != THEN) {
-		ParseError(line, "Not a THEN");
-		return false;
-	}
+    // 4. Parse the statement list for this branch.
+    if (!StmtList(in, line)) {
+         ParseError(line, "Incorrect statement list.");
+         return false;
+    }
 
-	status = StmtList(in, line);
-	if(!status) {
-		ParseError(line, "Incorrect statement list. !");
-		return false;
-	}
+    // 5. Process additional branches.
+    tok = Parser::GetNextToken(in, line);
+    while (tok == ELSIF) {
+         if (!Expr(in, line)) {
+             ParseError(line, "Missing if statement condition");
+             return false;
+         }
+         tok = Parser::GetNextToken(in, line);
+         if (tok != THEN) {
+             ParseError(line, "Not a THEN");
+             return false;
+         }
+         if (!StmtList(in, line)) {
+             ParseError(line, "Incorrect statement list.");
+             return false;
+         }
+         tok = Parser::GetNextToken(in, line);
+    }
 
-	tok = Parser::GetNextToken(in, line);
-	if(tok == ELSIF) {
-		Parser::PushBackToken(tok);
-		return IfStmt(in, line);
-	}
+    // 6. Check for an optional ELSE branch.
+    if (tok == ELSE) {
+         if (!StmtList(in, line)) {
+              ParseError(line, "Incorrect statement list.");
+              return false;
+         }
+         tok = Parser::GetNextToken(in, line);
+    }
 
-	if(tok == ELSE) {
-		status = StmtList(in, line);
-		if(!status) {
-			ParseError(line, "Incorrect statement list. !");
-			return false;
-		}
-	}
+    // 7. Now we expect the closing tokens: END, then IF, then SEMICOL.
+    if (tok != END) {
+         // If we see an ELSE here, that means an extra ELSE was encountered.
+         if (tok == ELSE)
+             ParseError(line, "Missing closing END IF for If-statement.");
+         else
+             ParseError(line, "Missing END");
+         return false;
+    }
+    tok = Parser::GetNextToken(in, line);
+    if (tok != IF) {
+         ParseError(line, "Missing IF after END");
+         return false;
+    }
+    tok = Parser::GetNextToken(in, line);
+    if (tok != SEMICOL) {
+         ParseError(line, "Missing semicolon after END IF");
+         return false;
+    }
 
-	if(tok == END) {
-		tok = Parser::GetNextToken(in, line);
-		if(tok == IF) {
-			tok = Parser::GetNextToken(in, line);
-			if (tok == SEMICOL) {
-				return true;
-			}
-		}
-	} else {
-		ParseError(line, "Something went wrong here!");
-		return false;
-	}
-
-	return false;
+    return true;
 }
-bool AssignStmt(istream& in, int& line){
+
+
+bool AssignStmt(istream& in, int& line) {
 	bool status = false;
 	LexItem tok;
 
 	status = Var(in, line);
 	if(!status) {
+		return false;
+	}
+
+	// Consume the assignment operator.
+	tok = Parser::GetNextToken(in, line);
+	if(tok != ASSOP) {
+		ParseError(line, "Missing Assignment Operator");
+		cout << "look " << tok << " " << Parser::GetNextToken(in, line) << endl;
 		return false;
 	}
 
@@ -438,13 +505,14 @@ bool AssignStmt(istream& in, int& line){
 
 	tok = Parser::GetNextToken(in, line);
 	if (tok != SEMICOL) {
-		ParseError(line, "Incorrect semicolon found@.");
+		int errLine = computeMissingSemicolonErrorLine(lastTokenLine, tok);
+		ParseError(errLine, "Incorrect semicolon found@.");
 		return false;
 	}
-
 	return true;
 }
-bool Var(istream& in, int& line){
+
+bool Var(istream& in, int& line) {
 	LexItem tok;
 	tok = Parser::GetNextToken(in, line);
 	if(tok != IDENT) {
@@ -453,13 +521,14 @@ bool Var(istream& in, int& line){
 	}
 	return true;
 }
-bool Expr(istream& in, int& line){
+
+bool Expr(istream& in, int& line) {
 	LexItem tok;
 	bool status = false;
 
 	status = Relation(in, line);
 	if(!status) {
-		ParseError(line, "Incorrect relatioon statement.");
+		// Propagate error without duplicating the message.
 		return false;
 	}
 
@@ -472,168 +541,174 @@ bool Expr(istream& in, int& line){
 
 	return true;
 }
-bool Relation(istream& in, int& line){
+
+bool Relation(istream& in, int& line) {
 	LexItem tok;
 	bool status = false;
 
 	status = SimpleExpr(in, line);
-	if(!status) {
-		ParseError(line, "Incorrect simple expression statement.1");
+	if (!status) {
 		return false;
 	}
 
+	// Check for a relational operator.
 	tok = Parser::GetNextToken(in, line);
-
-	if(tok == EQ || tok == NEQ || tok == LTHAN || tok == LTE || tok == GTHAN || tok == GTE) {
+	if (tok == EQ || tok == NEQ || tok == LTHAN || tok == LTE || tok == GTHAN || tok == GTE) {
+		// Parse the SimpleExpr on the right of the relational operator.
 		status = SimpleExpr(in, line);
-		if(!status) {
+		if (!status) {
 			ParseError(line, "Missing operand after operator");
 			return false;
 		}
-	} else {
-		Parser::PushBackToken(tok);
-	}
-
-	return true;
-}
-extern bool SimpleExpr(istream& in, int& line){
-	LexItem tok;
-	bool status = false;
-
-	status = STerm(in, line);
-	if(!status) {
-		ParseError(line, "Incorrect S term statement.");
-		return false;
-	}
-
-	tok = Parser::GetNextToken(in, line);
-	if(tok == PLUS || tok == MINUS || tok == CONCAT) {
-		return SimpleExpr(in, line);
-	}
-
-	Parser::PushBackToken(tok);
-
-	return true;
-}
-extern bool STerm(istream& in, int& line){
-	LexItem tok;
-	bool status = false;
-
-	tok = Parser::GetNextToken(in, line);
-	if(tok == PLUS || tok == MINUS) {
-		status = Term(in, line, tok.GetToken());
-		if(!status) {
-			ParseError(line, "Incorrect T-Term statement.");
-			return false;
-		}
-	} else {
-		Parser::PushBackToken(tok);
-		status = Term(in, line, PLUS);
-		if(!status) {
-			ParseError(line, "Incorrect T-Term statement.");
-			return false;
-		}
-	}
-	return true;
-}
-extern bool Term(istream& in, int& line, int sign){
-	LexItem tok;
-	bool status = false;
-
-	status = Factor(in, line, sign);
-	if(!status) {
-		ParseError(line, "Incorrect factor statement.");
-		return false;
-	}
-	tok = Parser::GetNextToken(in, line);
-	if(tok == MULT || tok == DIV || tok == MOD) {
-		return Term(in, line, sign);
-	}
-
-	Parser::PushBackToken(tok);
-
-	return true;
-}
-extern bool Factor(istream& in, int& line, int sign){
-	LexItem tok;
-	bool status = false;
-
-	if (tok == NOT) {
-		status = Primary(in, line, tok.GetToken());
-		if(!status) {
-			ParseError(line, "Incorrect primary expression statement.");
-			return false;
-		}
-		return true;
-	}
-
-	status = Primary(in, line, sign);
-	if(!status) {
-		ParseError(line, "Incorrect factor statement.");
-		return false;
-	}
-	tok = Parser::GetNextToken(in, line);
-	if (tok == EXP) {
+		// Now, if another relational operator appears immediately,
+		// this is illegal (you cannot chain two).
 		tok = Parser::GetNextToken(in, line);
-		if (tok == PLUS || tok == MINUS) {
-			status = Primary(in, line, tok.GetToken());
-			if(!status) {
-				ParseError(line, "Incorrect primary expression statement.");
-				return false;
-			}
+		if (tok == EQ || tok == NEQ || tok == LTHAN || tok == LTE || tok == GTHAN || tok == GTE) {
+			ParseError(line, "Missing right parenthesis after expression");
+			return false;
 		} else {
 			Parser::PushBackToken(tok);
-			status = Primary(in, line, PLUS);
-			if(!status) {
-				ParseError(line, "Incorrect primary expression statement.");
-				return false;
-			}
 		}
 	} else {
 		Parser::PushBackToken(tok);
 	}
 	return true;
 }
-extern bool Primary(istream& in, int& line, int sign){
+
+
+bool SimpleExpr(istream& in, int& line) {
+    LexItem tok;
+    bool status = false;
+
+    status = STerm(in, line);
+    if(!status) {
+        return false;
+    }
+    tok = Parser::GetNextToken(in, line);
+    if(tok == PLUS || tok == MINUS || tok == CONCAT) {
+        return SimpleExpr(in, line);
+    }
+    Parser::PushBackToken(tok);
+    return true;
+}
+
+bool STerm(istream& in, int& line) {
+    LexItem tok;
+    bool status = false;
+    tok = Parser::GetNextToken(in, line);
+    if(tok == PLUS || tok == MINUS) {
+        status = Term(in, line, tok.GetToken());
+        if(!status) {
+            return false;
+        }
+    } else {
+        Parser::PushBackToken(tok);
+        status = Term(in, line, PLUS);
+        if(!status) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Term(istream& in, int& line, int sign) {
+    LexItem tok;
+    bool status = false;
+
+    status = Factor(in, line, sign);
+    if(!status) {
+        // When a Factor fails after an operator, use its token’s line number.
+        ParseError(computeErrorLine(line), "Missing operand");
+        return false;
+    }
+    tok = Parser::GetNextToken(in, line);
+    if(tok == MULT || tok == DIV || tok == MOD) {
+        return Term(in, line, sign);
+    }
+    Parser::PushBackToken(tok);
+    return true;
+}
+
+bool Factor(istream& in, int& line, int sign) {
+    LexItem tok;
+    bool status = false;
+    tok = Parser::GetNextToken(in, line);
+    if(tok == NOT) {
+        status = Primary(in, line, tok.GetToken());
+        if(!status) {
+            return false;
+        }
+        return true;
+    }
+    Parser::PushBackToken(tok);
+    status = Primary(in, line, sign);
+    if(!status) {
+        return false;
+    }
+    tok = Parser::GetNextToken(in, line);
+    if (tok == EXP) {
+        tok = Parser::GetNextToken(in, line);
+        if (tok == PLUS || tok == MINUS) {
+            status = Primary(in, line, tok.GetToken());
+            if(!status) {
+                return false;
+            }
+        } else {
+            Parser::PushBackToken(tok);
+            status = Primary(in, line, PLUS);
+            if(!status) {
+                return false;
+            }
+        }
+    } else {
+        Parser::PushBackToken(tok);
+    }
+    return true;
+}
+
+bool Primary(istream& in, int& line, int sign) {
 	LexItem tok;
 	bool status = false;
-
 	tok = Parser::GetNextToken(in, line);
 	if(tok == ICONST || tok == BCONST || tok == FCONST || tok == SCONST || tok == CCONST) {
 		return true;
 	}
-
 	if(tok == LPAREN) {
 		status = Expr(in, line);
 		if(!status) {
-			ParseError(line, "Incorrect expression2 statement.");
+			// Propagate error without printing extra messages.
 			return false;
 		}
 		tok = Parser::GetNextToken(in, line);
 		if(tok != RPAREN) {
-			ParseError(line, "Incorrect Right Parenthesis statement.");
 			return false;
 		}
 		return true;
 	}
-
 	Parser::PushBackToken(tok);
-
 	status = Name(in, line);
 	if(!status) {
-		ParseError(line, "Incorrect operand statement.");
+		// Print only one error message at this level.
+		ParseError(line, "Incorrect operand");
 		return false;
 	}
-
 	return true;
 }
-extern bool Name(istream& in, int& line){
+
+bool Name(istream& in, int& line) {
 	LexItem tok;
 	bool status = false;
 
 	tok = Parser::GetNextToken(in, line);
 	if(tok != IDENT) {
-		ParseError(line, "Incorrect identifier statement. %%" + tok.GetLexeme());
+		ParseError(line, "Invalid Expression");
+		return false;
+	}
+
+	string varName = tok.GetLexeme();
+	if(defVar.find(varName) == defVar.end()) {
+		ParseError(line, "Using Undefined Variable");
+		ParseError(line, "Invalid reference to a variable.");
 		return false;
 	}
 
@@ -641,21 +716,21 @@ extern bool Name(istream& in, int& line){
 	if(tok == LPAREN) {
 		status = Range (in, line);
 		if(!status) {
-			ParseError(line, "Incorrect range 22statement.");
+			ParseError(line, "Incorrect range statement.");
 			return false;
 		}
 		tok = Parser::GetNextToken(in, line);
 		if(tok != RPAREN) {
-			ParseError(line, "Incorrect right parenthesis2 statement.");
+			ParseError(line, "Incorrect right parenthesis statement.");
 			return false;
 		}
 	} else {
 		Parser::PushBackToken(tok);
 	}
-
 	return true;
 }
-extern bool Range(istream& in, int& line){
+
+bool Range(istream& in, int& line) {
 	LexItem tok;
 	bool status = false;
 
